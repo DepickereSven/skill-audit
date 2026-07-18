@@ -1,12 +1,13 @@
 {
-  "name": "claude-skill-audit",
+  "name": "depickeresven-skill-audit",
   "owner": {
-    "name": "Sven Depickere"
+    "name": "Sven Depickere",
+    "url": "https://github.com/DepickereSven"
   },
   "plugins": [
     {
       "name": "skill-audit",
-      "source": "./",
+      "source": ".",
       "description": "Deterministic audit trail of Claude Code skill invocations and file changes per session"
     }
   ]

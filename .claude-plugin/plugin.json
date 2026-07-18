@@ -3,6 +3,10 @@
   "description": "Deterministic audit trail of Claude Code skill invocations and file changes per session — know which skills fired before you review the code",
   "version": "0.1.0",
   "author": {
-    "name": "Sven Depickere"
-  }
+    "name": "Sven Depickere",
+    "url": "https://github.com/DepickereSven"
+  },
+  "homepage": "https://github.com/DepickereSven/skill-audit",
+  "repository": "https://github.com/DepickereSven/skill-audit",
+  "license": "MIT"
 }

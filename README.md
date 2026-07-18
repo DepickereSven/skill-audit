@@ -1,4 +1,4 @@
-# claude-skill-audit
+# skill-audit
 
 Deterministic audit trail for [Claude Code](https://code.claude.com) sessions: which **skills** were invoked, when, and which **files** were changed afterwards — so you can check skill compliance at a glance *before* reading any code.
 
@@ -69,14 +69,14 @@ fi
 
 ## Usage
 
-| Command | What | Tokens |
-|---|---|---|
-| `skill-audit status` | compact view: counts + recent timeline | 0 |
-| `skill-audit report [sid]` | full timeline | 0 |
-| `skill-audit watch` | live view in a second terminal, 2s refresh, `q` quits — works while the model is generating | 0 |
-| `skill-audit list` | recent sessions | 0 |
-| `! skill-audit status` | same, inside a Claude session (queues while model busy) | 0 |
-| `/skill-audit` | timeline inside the conversation | model turn |
+| Command                    | What                                                                                        | Tokens     |
+|----------------------------|---------------------------------------------------------------------------------------------|------------|
+| `skill-audit status`       | compact view: counts + recent timeline                                                      | 0          |
+| `skill-audit report [sid]` | full timeline                                                                               | 0          |
+| `skill-audit watch`        | live view in a second terminal, 2s refresh, `q` quits — works while the model is generating | 0          |
+| `skill-audit list`         | recent sessions                                                                             | 0          |
+| `! skill-audit status`     | same, inside a Claude session (queues while model busy)                                     | 0          |
+| `/skill-audit`             | timeline inside the conversation                                                            | model turn |
 
 The `⚠ edits outside skill context` counter is the compliance red flag: files changed while no skill was active.
 
