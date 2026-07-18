@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# skill-audit — deterministic audit of Claude Code skill usage per session.
+#
+#   skill-audit status  [session_id]   compact view: counts + recent timeline
+#   skill-audit report  [session_id]   full timeline
+#   skill-audit watch   [session_id]   live view, redraws every 2s (q to quit)
+#   skill-audit list                   recent sessions
+#
+# Data source: NDJSON logs written by logger.sh (PostToolUse hooks).
+# Default session: most recently modified log.
+set -euo pipefail
+
+LOG_DIR="${SKILL_AUDIT_DIR:-$HOME/.claude/skill-audit}"
+
+if [ -t 1 ]; then
+  BOLD=$'\033[1m'; DIM=$'\033[2m'; CYAN=$'\033[36m'; YEL=$'\033[33m'; GRN=$'\033[32m'; RST=$'\033[0m'
+else
+  BOLD=""; DIM=""; CYAN=""; YEL=""; GRN=""; RST=""
+fi
+
+resolve_sid() {
+  if [ -n "${1:-}" ]; then printf '%s\n' "$1"; return; fi
+  local latest
+  latest="$(ls -t "$LOG_DIR"/*.ndjson 2>/dev/null | head -1 || true)"
+  [ -n "$latest" ] && basename "$latest" .ndjson
+}
+
+# Emit timeline as TSV: S<TAB>ts<TAB>skill  /  F<TAB>ts<TAB>tool<TAB>path
+timeline_tsv() {
+  jq -rs '
+    reduce .[] as $e ([];
+      if $e.kind == "skill" then
+        . + [{skill: $e.name, ts: $e.ts, files: []}]
+      elif $e.kind == "file" then
+        (if length == 0 then [{skill: "(no skill active)", ts: $e.ts, files: []}] else . end)
+        | .[:-1] + [(.[-1] | .files += [{ts: $e.ts, tool: $e.tool, path: $e.path}])]
+      else . end)
+    | .[]
+    | [["S", .ts, .skill]] + [(.files[] | ["F", .ts, .tool, .path])]
+    | .[] | @tsv
+  ' "$1"
+}
+
+render_timeline() { # stdin: TSV lines; $1: cwd prefix to strip
+  local cwd="${1:-}"
+  while IFS=$'\t' read -r type ts a b; do
+    local hhmm="${ts:11:5}"
+    case "$type" in
+      S)
+        if [ "$a" = "(no skill active)" ]; then
+          printf '  %s %s⚠ %s%s\n' "$hhmm" "$YEL" "$a" "$RST"
+        else
+          printf '  %s %s⚡ %s%s\n' "$hhmm" "$CYAN" "$a" "$RST"
+        fi ;;
+      F)
+        local rel="$b"
+        [ -n "$cwd" ] && rel="${b#"$cwd"/}"
+        printf '  %s %s│%s  ✎ %s  %s%s%s\n' "$hhmm" "$DIM" "$RST" "$rel" "$DIM" "$a" "$RST" ;;
+    esac
+  done
+}
+
+session_header_and_body() { # $1: sid, $2: max timeline lines (0 = all)
+  local sid="$1" max="$2"
+  local log="$LOG_DIR/$sid.ndjson"
+  if [ ! -f "$log" ]; then
+    printf 'skill-audit: no log for session %s in %s\n' "$sid" "$LOG_DIR"
+    return 0
+  fi
+
+  local cwd n_runs n_distinct n_files n_orphan t_first t_last
+  cwd="$(jq -r 'select(.cwd != null and .cwd != "") | .cwd' "$log" | head -1 || true)"
+  n_runs="$(jq -r 'select(.kind=="skill") | .name' "$log" | grep -c . || true)"
+  n_distinct="$(jq -r 'select(.kind=="skill") | .name' "$log" | sort -u | grep -c . || true)"
+  n_files="$(jq -r 'select(.kind=="file") | .path' "$log" | sort -u | grep -c . || true)"
+  t_first="$(jq -r '.ts' "$log" | head -1 || true)"
+  t_last="$(jq -r '.ts' "$log" | tail -1 || true)"
+  n_orphan="$(jq -rs '
+    reduce .[] as $e ([];
+      if $e.kind == "skill" then . + [{skill: $e.name, files: 0}]
+      elif $e.kind == "file" then
+        (if length == 0 then [{skill: "(no skill active)", files: 0}] else . end)
+        | .[:-1] + [(.[-1] | .files += 1)]
+      else . end)
+    | map(select(.skill == "(no skill active)") | .files) | add // 0
+  ' "$log")"
+
+  printf '%s● Skill audit%s — %s %s·%s %s %s·%s %s→%s UTC\n\n' \
+    "$BOLD" "$RST" "${sid:0:8}" "$DIM" "$RST" "${cwd/#$HOME/~}" \
+    "$DIM" "$RST" "${t_first:11:5}" "${t_last:11:5}"
+
+  local tl
+  tl="$(timeline_tsv "$log")"
+  if [ -z "$tl" ]; then
+    printf '  %sno skill or file events recorded yet%s\n' "$DIM" "$RST"
+  elif [ "$max" -gt 0 ] && [ "$(printf '%s\n' "$tl" | wc -l)" -gt "$max" ]; then
+    printf '  %s… earlier events truncated — `skill-audit report` for all%s\n' "$DIM" "$RST"
+    printf '%s\n' "$tl" | tail -"$max" | render_timeline "$cwd"
+  else
+    printf '%s\n' "$tl" | render_timeline "$cwd"
+  fi
+
+  printf '\n%s●%s %s skill runs (%s distinct) · %s files touched' \
+    "$GRN" "$RST" "$n_runs" "$n_distinct" "$n_files"
+  if [ "$n_orphan" -gt 0 ]; then
+    printf ' · %s⚠ %s edits outside skill context%s' "$YEL" "$n_orphan" "$RST"
+  fi
+  printf '\n'
+}
+
+cmd_status() {
+  local sid; sid="$(resolve_sid "${1:-}")"
+  [ -z "$sid" ] && { printf 'skill-audit: no session logs in %s\n' "$LOG_DIR"; return 0; }
+  session_header_and_body "$sid" 14
+}
+
+cmd_report() {
+  local sid; sid="$(resolve_sid "${1:-}")"
+  [ -z "$sid" ] && { printf 'skill-audit: no session logs in %s\n' "$LOG_DIR"; return 0; }
+  session_header_and_body "$sid" 0
+}
+
+cmd_watch() {
+  local sid="${1:-}"
+  trap 'tput cnorm 2>/dev/null || true; printf "\n"; exit 0' INT TERM
+  tput civis 2>/dev/null || true
+  while true; do
+    local out
+    out="$(cmd_status "$sid" 2>&1 || true)"
+    clear
+    printf '%s\n\n%slive · refreshed %s · q to quit%s\n' "$out" "$DIM" "$(date +%H:%M:%S)" "$RST"
+    local key=""
+    read -r -t 2 -n 1 key 2>/dev/null || true
+    if [ "$key" = "q" ]; then break; fi
+  done
+  tput cnorm 2>/dev/null || true
+}
+
+cmd_list() {
+  local found=0
+  for f in $(ls -t "$LOG_DIR"/*.ndjson 2>/dev/null || true); do
+    found=1
+    local sid cwd ns nf mt
+    sid="$(basename "$f" .ndjson)"
+    cwd="$(jq -r 'select(.cwd != null and .cwd != "") | .cwd' "$f" | head -1 || true)"
+    ns="$(jq -r 'select(.kind=="skill") | .name' "$f" | grep -c . || true)"
+    nf="$(jq -r 'select(.kind=="file") | .path' "$f" | sort -u | grep -c . || true)"
+    mt="$(date -r "$f" +'%Y-%m-%d %H:%M')"
+    printf '%s  %s%-10s%s ⚡%-3s ✎%-3s %s%s%s\n' \
+      "$mt" "$BOLD" "${sid:0:8}" "$RST" "$ns" "$nf" "$DIM" "${cwd/#$HOME/~}" "$RST"
+  done
+  [ "$found" -eq 0 ] && printf 'skill-audit: no session logs in %s\n' "$LOG_DIR"
+  return 0
+}
+
+case "${1:-status}" in
+  status) cmd_status "${2:-}" ;;
+  report) cmd_report "${2:-}" ;;
+  watch)  cmd_watch  "${2:-}" ;;
+  list)   cmd_list ;;
+  -h|--help|help)
+    sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//' ;;
+  *)
+    printf 'skill-audit: unknown command "%s" (status|report|watch|list)\n' "$1" >&2
+    exit 1 ;;
+esac
