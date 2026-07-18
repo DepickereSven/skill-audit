@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# skill-audit — deterministic audit of Claude Code skill usage per session.
+# skill-audit — audit skill usage and file edits in Claude Code or Codex sessions.
 #
 #   skill-audit status  [session_id]   compact view: counts + recent timeline
 #   skill-audit report  [session_id]   full timeline

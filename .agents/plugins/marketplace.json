@@ -1,0 +1,20 @@
+{
+  "name": "depickeresven-skill-audit",
+  "interface": {
+    "displayName": "Sven Depickere"
+  },
+  "plugins": [
+    {
+      "name": "skill-audit",
+      "source": {
+        "source": "local",
+        "path": "./"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

@@ -1,5 +1,5 @@
 ---
-description: Show the skill-usage audit timeline for the current session
+description: Show the skill-usage audit timeline for the current Claude Code session
 allowed-tools: Bash(${CLAUDE_PLUGIN_ROOT}/scripts/skill-audit:*)
 ---
 

@@ -1,0 +1,27 @@
+{
+  "name": "skill-audit",
+  "version": "0.2.0",
+  "description": "Audit trail of skill invocations and file changes for Claude Code and Codex sessions",
+  "author": {
+    "name": "Sven Depickere",
+    "url": "https://github.com/DepickereSven"
+  },
+  "homepage": "https://github.com/DepickereSven/skill-audit",
+  "repository": "https://github.com/DepickereSven/skill-audit",
+  "license": "MIT",
+  "keywords": ["audit", "skills", "hooks", "codex", "claude-code"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Skill Audit",
+    "shortDescription": "Review skills and edits by session",
+    "longDescription": "Shows an auditable timeline of observable skill invocations and subsequent file edits for Claude Code and Codex sessions.",
+    "developerName": "Sven Depickere",
+    "category": "Productivity",
+    "capabilities": ["Read"],
+    "websiteURL": "https://github.com/DepickereSven/skill-audit",
+    "defaultPrompt": [
+      "Show the skill audit for this session."
+    ],
+    "brandColor": "#10A37F"
+  }
+}

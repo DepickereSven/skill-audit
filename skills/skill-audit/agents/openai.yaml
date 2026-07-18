@@ -1,0 +1,4 @@
+interface:
+  display_name: "Skill Audit"
+  short_description: "Show observable skill and file-edit history"
+  default_prompt: "Use $skill-audit to show this session audit timeline."

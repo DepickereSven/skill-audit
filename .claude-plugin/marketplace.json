@@ -7,8 +7,8 @@
   "plugins": [
     {
       "name": "skill-audit",
-      "source": ".",
-      "description": "Deterministic audit trail of Claude Code skill invocations and file changes per session"
+      "source": "./",
+      "description": "Audit trail of skill invocations and file changes for Claude Code and Codex sessions"
     }
   ]
 }
