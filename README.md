@@ -104,15 +104,15 @@ fi
 
 ## Usage
 
-| Command | What | Tokens |
-|---|---|---:|
-| `skill-audit status` | Compact counts and recent timeline | 0 |
-| `skill-audit report [sid]` | Full timeline | 0 |
-| `skill-audit watch` | Live view, refreshed every two seconds; `q` quits | 0 |
-| `skill-audit list` | Recent sessions | 0 |
-| `! skill-audit status` | Run inside a Claude Code session; queues while the model is busy | 0 |
-| `/skill-audit` | Show the report inside Claude Code | Model turn |
-| `$skill-audit` | Show the report inside Codex | Model turn |
+| Command                    | What                                                             |     Tokens |
+|----------------------------|------------------------------------------------------------------|-----------:|
+| `skill-audit status`       | Compact counts and recent timeline                               |          0 |
+| `skill-audit report [sid]` | Full timeline                                                    |          0 |
+| `skill-audit watch`        | Live view, refreshed every two seconds; `q` quits                |          0 |
+| `skill-audit list`         | Recent sessions                                                  |          0 |
+| `! skill-audit status`     | Run inside a Claude Code session; queues while the model is busy |          0 |
+| `/skill-audit`             | Show the report inside Claude Code                               | Model turn |
+| `$skill-audit`             | Show the report inside Codex                                     | Model turn |
 
 The `⚠ edits outside skill context` counter is the compliance red flag: files changed while no
 observable skill was active.
