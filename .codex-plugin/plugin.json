@@ -1,6 +1,6 @@
 {
   "name": "skill-audit",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "Audit trail of skill invocations and file changes for Claude Code and Codex sessions",
   "author": {
     "name": "Sven Depickere",

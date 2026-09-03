@@ -1,6 +1,6 @@
 {
   "name": "opencode-skill-audit",
-  "version": "0.3.0",
+  "version": "0.1.0",
   "description": "Audit trail of skill invocations and file changes, with a live timeline in the opencode sidebar",
   "type": "module",
   "license": "MIT",
@@ -45,7 +45,11 @@
     "build:tui": "bun build src/tui.ts --outfile dist/tui.js --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk --external @opentui/core --external @opentui/solid --external solid-js",
     "build": "bun run clean && bun run build:types && bun run build:index && bun run build:tui",
     "test": "bun test && ./test/format-contract.sh",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check:versions": "node scripts/sync-versions.mjs --check",
+    "sync:versions": "node scripts/sync-versions.mjs",
+    "version": "node scripts/sync-versions.mjs && git add .claude-plugin/plugin.json .codex-plugin/plugin.json",
+    "prepublishOnly": "bun run check:versions && bun run typecheck && bun run test && bun run build"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.14.0",
