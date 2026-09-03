@@ -1,9 +1,12 @@
 # skill-audit
 
-Deterministic audit trail for [Claude Code](https://code.claude.com) and
-[Codex](https://developers.openai.com/codex/) sessions: which observable **skills** were invoked,
-when, and which **files** were changed afterwards. It gives you a quick skill-compliance signal
-before you read the code.
+Deterministic audit trail for [Claude Code](https://code.claude.com),
+[Codex](https://developers.openai.com/codex/) and [opencode](https://opencode.ai) sessions: which
+observable **skills** were invoked, when, and which **files** were changed afterwards. It gives you
+a quick skill-compliance signal before you read the code.
+
+On opencode it also renders live in the TUI sidebar, so the audit sits next to the conversation
+with no command to run.
 
 LLMs are not deterministic; hook events are. This plugin logs the facts exposed by each host's
 documented hook API. It performs no LLM judging, spends no tokens, and does not parse transcripts.
@@ -25,14 +28,20 @@ documented hook API. It performs no LLM judging, spends no tokens, and does not 
 
 `PostToolUse` hooks capture skill-tool calls and file edits. On Codex, a `UserPromptSubmit` hook
 also captures explicit `$skill-name` references, and `apply_patch` payloads are expanded into one
-file event per path. Events are appended as NDJSON to
-`~/.claude/skill-audit/<session_id>.ndjson`; override the location with `SKILL_AUDIT_DIR`.
+file event per path. On opencode a plugin does the same job through the `tool.execute.after` hook.
+Events are appended as NDJSON to `~/.claude/skill-audit/<session_id>.ndjson`; override the location
+with `SKILL_AUDIT_DIR`.
 
 ```text
-Claude Code / Codex ──hooks──▶ logger.sh ──▶ ~/.claude/skill-audit/<sid>.ndjson
-                                                        │
-                              skill-audit status/report/watch/list ◀─┘
+Claude Code / Codex ──hooks───▶ logger.sh ──┐
+                                            ├─▶ ~/.claude/skill-audit/<sid>.ndjson
+opencode ──tool.execute.after──▶ plugin ────┘             │
+                                                          ├─▶ skill-audit status/report/watch/list
+                                                          └─▶ opencode sidebar (live)
 ```
+
+The log is the only contract between the writers and the viewers, so the CLI reads opencode
+sessions and the opencode sidebar reads Claude Code sessions.
 
 Subagent hook calls use the parent session ID, so delegated edits appear in the same audit.
 
@@ -64,6 +73,36 @@ surface, but not in the IDE extension. See the official
 [hook](https://developers.openai.com/codex/hooks) documentation.
 
 Invoke the bundled Codex skill with `$skill-audit`.
+
+### opencode
+
+```bash
+opencode plugin opencode-skill-audit --global
+```
+
+Restart opencode so the plugin loads. It registers two things: a server hook that logs
+`skill`, `edit`, `write` and `apply_patch` tool calls, and a sidebar section that renders the
+current session's timeline live.
+
+```text
+▼ Skill audit  ⚡2 ✎4 ⚠1
+⚠ 14:01 no skill
+     ✎ src/index.ts
+  14:02 brainstorming
+▼ 14:05 test-driven-development
+     ✎ src/auth/token.ts
+     ✎ src/auth/token.test.ts
+```
+
+Click the header to collapse the section, or a skill row to fold its files away.
+
+opencode discovers skills natively, including from `.claude/skills/` and `.agents/skills/`, so
+skills you already use are logged without moving them. To get the in-session report as well, link
+the bundled skill into a directory opencode scans:
+
+```bash
+ln -sf "$PWD/skills/skill-audit" ~/.config/opencode/skills/skill-audit
+```
 
 ### CLI on your PATH (recommended)
 
@@ -111,6 +150,7 @@ fi
 | `skill-audit watch`        | Live view, refreshed every two seconds; `q` quits                |          0 |
 | `skill-audit list`         | Recent sessions                                                  |          0 |
 | `! skill-audit status`     | Run inside a Claude Code session; queues while the model is busy |          0 |
+| opencode sidebar           | Live timeline beside the conversation; no command to run         |          0 |
 | `/skill-audit`             | Show the report inside Claude Code                               | Model turn |
 | `$skill-audit`             | Show the report inside Codex                                     | Model turn |
 
@@ -145,9 +185,12 @@ find ~/.claude/skill-audit -name '*.ndjson' -mtime +30 -delete
 - **Prompt-sourced entries are syntax-level evidence.** Codex supplies plain prompt text to the
   hook, so a lower-case dollar-prefixed token can be logged even if it does not resolve to an
   installed skill. The NDJSON `source: "prompt"` field distinguishes these entries.
-- **Only observable file tools are captured.** Claude `Edit`/`Write`/`NotebookEdit` and Codex
-  `apply_patch` edits are logged. Files created indirectly by shell commands are not visible as
-  separate file events.
+- **Only observable file tools are captured.** Claude `Edit`/`Write`/`NotebookEdit`, Codex
+  `apply_patch`, and opencode `edit`/`write`/`apply_patch` edits are logged. Files created
+  indirectly by shell commands are not visible as separate file events.
+- **opencode agents and subagents are not logged.** They have no equivalent on the other two
+  hosts, so logging them would add an event kind only one host can emit. The audit keeps one data
+  model across all three.
 - **Session-start injected skills** are context, not skill tool calls, and do not appear.
 - **Concurrent sessions:** the newest-log default can pick the wrong session; pass the session ID
   explicitly after using `skill-audit list`.
@@ -155,5 +198,5 @@ find ~/.claude/skill-audit -name '*.ndjson' -mtime +30 -delete
 ## Requirements
 
 - macOS or Linux
-- `bash`
-- `jq`
+- `bash` and `jq` for the CLI viewer and the Claude Code / Codex hooks
+- opencode `>= 1.14` for the plugin and its sidebar
