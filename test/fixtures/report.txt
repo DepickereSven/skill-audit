@@ -1,0 +1,11 @@
+● Skill audit — session · /w · 14:01→14:20 UTC
+
+  14:01 ⚠ (no skill active)
+  14:01 │  ✎ src/index.ts  edit
+  14:02 ⚡ superpowers:brainstorming
+  14:05 ⚡ superpowers:test-driven-development
+  14:06 │  ✎ src/auth/token.ts  edit
+  14:09 │  ✎ src/auth/token.test.ts  write
+  14:20 │  ✎ README.md  apply_patch
+
+● 2 skill runs (2 distinct) · 4 files touched · ⚠ 1 edits outside skill context

@@ -1,0 +1,44 @@
+{
+  "ts": "2026-09-03T14:01:00Z",
+  "kind": "file",
+  "tool": "edit",
+  "path": "/w/src/index.ts",
+  "cwd": "/w"
+}
+{
+  "ts": "2026-09-03T14:02:00Z",
+  "kind": "skill",
+  "name": "superpowers:brainstorming",
+  "args": "",
+  "cwd": "/w",
+  "source": "tool"
+}
+{
+  "ts": "2026-09-03T14:05:00Z",
+  "kind": "skill",
+  "name": "superpowers:test-driven-development",
+  "args": "",
+  "cwd": "/w",
+  "source": "tool"
+}
+{
+  "ts": "2026-09-03T14:06:00Z",
+  "kind": "file",
+  "tool": "edit",
+  "path": "/w/src/auth/token.ts",
+  "cwd": "/w"
+}
+{
+  "ts": "2026-09-03T14:09:00Z",
+  "kind": "file",
+  "tool": "write",
+  "path": "/w/src/auth/token.test.ts",
+  "cwd": "/w"
+}
+{
+  "ts": "2026-09-03T14:20:00Z",
+  "kind": "file",
+  "tool": "apply_patch",
+  "path": "/w/README.md",
+  "cwd": "/w"
+}
