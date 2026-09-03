@@ -3,12 +3,8 @@
     "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
-    "lib": [
-      "ES2023"
-    ],
-    "types": [
-      "bun"
-    ],
+    "lib": ["ES2023"],
+    "types": ["bun"],
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "declaration": true,
@@ -19,7 +15,5 @@
     "verbatimModuleSyntax": true,
     "jsx": "preserve"
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }
