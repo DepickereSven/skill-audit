@@ -40,16 +40,21 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
+    "format": "prettier --write src test package.json tsconfig.json tsconfig.test.json eslint.config.js .github/workflows/ci.yml",
+    "format:check": "prettier --check src test package.json tsconfig.json tsconfig.test.json eslint.config.js .github/workflows/ci.yml",
+    "lint": "eslint src test",
     "build:types": "tsc --emitDeclarationOnly",
     "build:index": "bun build src/index.ts --outfile dist/index.js --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk",
     "build:tui": "bun build src/tui.ts --outfile dist/tui.js --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk --external @opentui/core --external @opentui/solid --external solid-js",
     "build": "bun run clean && bun run build:types && bun run build:index && bun run build:tui",
     "test": "bun test && ./test/format-contract.sh",
     "typecheck": "tsc --noEmit",
+    "typecheck:test": "tsc -p tsconfig.test.json",
+    "check": "bun run format:check && bun run lint && bun run typecheck && bun run typecheck:test && bun test && ./test/format-contract.sh",
     "check:versions": "node scripts/sync-versions.mjs --check",
     "sync:versions": "node scripts/sync-versions.mjs",
     "version": "node scripts/sync-versions.mjs && git add .claude-plugin/plugin.json .codex-plugin/plugin.json",
-    "prepublishOnly": "bun run check:versions && bun run typecheck && bun run test && bun run build"
+    "prepublishOnly": "bun run check:versions && bun run check && bun run build"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.14.0",
@@ -58,12 +63,17 @@
     "solid-js": ">=1.9.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@opencode-ai/plugin": "1.18.23",
     "@opentui/core": "0.4.5",
     "@opentui/solid": "0.4.5",
     "@types/bun": "latest",
+    "eslint": "^10.9.1",
+    "eslint-plugin-simple-import-sort": "^14.0.0",
+    "prettier": "^3.9.6",
     "solid-js": "1.9.9",
-    "typescript": "^5.8.2"
+    "typescript": "^5.8.2",
+    "typescript-eslint": "^8.69.0"
   },
   "engines": {
     "bun": ">=1.1.0"
