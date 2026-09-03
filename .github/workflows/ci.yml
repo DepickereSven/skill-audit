@@ -46,11 +46,8 @@ jobs:
       - name: Install dependencies from the committed lockfile
         run: bun install --frozen-lockfile
 
-      - name: Type-check the plugin and the TUI
-        run: bun run typecheck
-
-      - name: Run the unit tests and the bash renderer's format contract
-        run: bun run test
+      - name: Run formatting, linting, type-checks, tests, and the format contract
+        run: bun run check
 
   build:
     name: build
