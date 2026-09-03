@@ -1,0 +1,67 @@
+{
+  "name": "opencode-skill-audit",
+  "version": "0.3.0",
+  "description": "Audit trail of skill invocations and file changes, with a live timeline in the opencode sidebar",
+  "type": "module",
+  "license": "MIT",
+  "author": {
+    "name": "Sven Depickere",
+    "url": "https://github.com/DepickereSven"
+  },
+  "homepage": "https://github.com/DepickereSven/skill-audit",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DepickereSven/skill-audit.git"
+  },
+  "keywords": [
+    "opencode",
+    "opencode-plugin",
+    "audit",
+    "skills",
+    "sidebar",
+    "tui"
+  ],
+  "oc-plugin": [
+    "tui"
+  ],
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./tui": {
+      "import": "./dist/tui.js",
+      "types": "./dist/tui.d.ts"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build:types": "tsc --emitDeclarationOnly",
+    "build:index": "bun build src/index.ts --outfile dist/index.js --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk",
+    "build:tui": "bun build src/tui.ts --outfile dist/tui.js --target bun --format esm --external @opencode-ai/plugin --external @opencode-ai/sdk --external @opentui/core --external @opentui/solid --external solid-js",
+    "build": "bun run clean && bun run build:types && bun run build:index && bun run build:tui",
+    "test": "bun test && ./test/format-contract.sh",
+    "typecheck": "tsc --noEmit"
+  },
+  "peerDependencies": {
+    "@opencode-ai/plugin": ">=1.14.0",
+    "@opentui/core": ">=0.4.5",
+    "@opentui/solid": ">=0.4.5",
+    "solid-js": ">=1.9.0"
+  },
+  "devDependencies": {
+    "@opencode-ai/plugin": "1.18.23",
+    "@opentui/core": "0.4.5",
+    "@opentui/solid": "0.4.5",
+    "@types/bun": "latest",
+    "solid-js": "1.9.9",
+    "typescript": "^5.8.2"
+  },
+  "engines": {
+    "bun": ">=1.1.0"
+  }
+}
