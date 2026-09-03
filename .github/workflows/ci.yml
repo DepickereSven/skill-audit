@@ -1,0 +1,114 @@
+name: CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  manifests:
+    name: manifest versions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check the Claude Code and Codex manifests carry the same version as package.json
+        run: npm run check:versions
+
+  test:
+    name: test (bun ${{ matrix.bun }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # The floor declared in engines.bun, and whatever OpenCode users are
+        # actually running today.
+        bun: [ "1.1.0", "latest" ]
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Bun ${{ matrix.bun }}
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ matrix.bun }}
+
+      - name: Install dependencies from the committed lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Type-check the plugin and the TUI
+        run: bun run typecheck
+
+      - name: Run the unit tests and the bash renderer's format contract
+        run: bun run test
+
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install the latest Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies from the committed lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Bundle the plugin, the TUI and their type declarations
+        run: bun run build
+
+      - name: Fail unless the build produced every entry point package.json exports
+        run: |
+          for artifact in dist/index.js dist/index.d.ts dist/tui.js dist/tui.d.ts; do
+            test -s "$artifact" || { echo "::error::$artifact missing or empty after build"; exit 1; }
+          done
+          ls -l dist
+
+  package:
+    name: package contents
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Install Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install the latest Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install dependencies from the committed lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Build, because dist is generated rather than committed
+        run: bun run build
+
+      - name: Build the npm tarball and list everything it ships
+        run: |
+          mkdir -p /tmp/pack
+          tarball=$(npm pack --ignore-scripts --pack-destination /tmp/pack --json | node -p "'/tmp/pack/' + JSON.parse(require('fs').readFileSync(0)).at(0).filename")
+          echo "TARBALL=$tarball" >> "$GITHUB_ENV"
+          tar tzf "$tarball" | sort
+
+      - name: Fail unless the tarball ships every entry point package.json exports
+        run: |
+          for entry in package/dist/index.js package/dist/index.d.ts package/dist/tui.js package/dist/tui.d.ts; do
+            tar tzf "$TARBALL" | grep -qx "$entry" || { echo "::error::$entry missing from tarball"; exit 1; }
+          done
