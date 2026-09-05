@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
   workflow_dispatch:
 
@@ -33,7 +33,7 @@ jobs:
       matrix:
         # The floor declared in engines.bun, and whatever OpenCode users are
         # actually running today.
-        bun: [ "1.1.0", "latest" ]
+        bun: ["1.2.0", "latest"]
     steps:
       - name: Check out the repository
         uses: actions/checkout@v4
