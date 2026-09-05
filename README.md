@@ -2,6 +2,10 @@
 
 [![CI](https://github.com/DepickereSven/skill-audit/actions/workflows/ci.yml/badge.svg)](https://github.com/DepickereSven/skill-audit/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm](https://img.shields.io/npm/v/opencode-skill-audit?logo=npm&logoColor=white&color=CB3837)](https://www.npmjs.com/package/opencode-skill-audit)
+[![Claude Code](https://img.shields.io/badge/Claude_Code-supported-D97757?logo=claude&logoColor=white)](#claude-code)
+[![Codex](https://img.shields.io/badge/Codex-supported-000000?logoColor=white)](#codex)
+[![OpenCode](https://img.shields.io/badge/OpenCode-supported-FBBF24?logo=opencode&logoColor=white)](#opencode)
 
 Deterministic audit trail for [Claude Code](https://code.claude.com),
 [Codex](https://developers.openai.com/codex/) and [opencode](https://opencode.ai) sessions: which
