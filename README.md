@@ -33,7 +33,7 @@ with no command to run.
 You ask an agent to follow a skill. Did it? Reading the transcript to find out is slow, and asking
 another model to judge costs tokens and is itself non-deterministic.
 
-LLMs are not deterministic; hook events are. This plugin logs the facts exposed by each host's
+LLMs are not deterministic. Hook events are. This plugin logs the facts exposed by each host's
 documented hook API:
 
 - **No LLM judging, no tokens.** Everything except the two in-session slash/skill commands runs
@@ -47,6 +47,7 @@ documented hook API:
 
 ## Contents
 
+- [Why](#why)
 - [How it works](#how-it-works)
 - [Install](#install)
 - [Verify the install](#verify-the-install)
@@ -64,8 +65,9 @@ documented hook API:
 `PostToolUse` hooks capture skill-tool calls and file edits. On Codex, a `UserPromptSubmit` hook
 also captures explicit `$skill-name` references, and `apply_patch` payloads are expanded into one
 file event per path. On opencode a plugin does the same job through the `tool.execute.after` hook.
-Events are appended as NDJSON to `~/.claude/skill-audit/<session_id>.ndjson`; override the location
-with `SKILL_AUDIT_DIR`.
+Events are appended as NDJSON to `~/.claude/skill-audit/<session_id>.ndjson`. All three hosts
+write to that one directory on purpose, so any viewer can read any host's session. Override the
+location with `SKILL_AUDIT_DIR`.
 
 ```text
 Claude Code / Codex ──hooks───▶ logger.sh ──┐
@@ -115,12 +117,14 @@ Invoke the bundled Codex skill with `$skill-audit`.
 opencode plugin opencode-skill-audit --global
 ```
 
+The plugin is published on npm as
+[`opencode-skill-audit`](https://www.npmjs.com/package/opencode-skill-audit).
+
 Restart opencode so the plugin loads. It registers two things: a server hook that logs
-`skill`, `edit`, `write` and `apply_patch` tool calls, and a sidebar section that renders the
-current session's timeline live.
+`skill`, `edit`, `write`, `multiedit`, `apply_patch` and `patch` tool calls, and a sidebar section
+that renders the current session's timeline live.
 
-
-![OpenCode Image](docs/opencode.png)
+![The opencode sidebar rendering a live skill-audit timeline beside a conversation](docs/opencode.png)
 
 Click the header to collapse the section, or a skill row to fold its files away.
 
@@ -150,7 +154,7 @@ ln -sf ~/.codex/plugins/cache/*/skill-audit/*/scripts/skill-audit ~/.local/bin/s
 
 You can also clone this repository and link `scripts/skill-audit` directly.
 
-`~/.local/bin` is not on every system's `PATH`. Check with `command -v skill-audit`; if it prints
+`~/.local/bin` is not on every system's `PATH`. Check with `command -v skill-audit`. If it prints
 nothing, add the directory in your shell profile:
 
 ```bash
@@ -186,7 +190,8 @@ installing.
    - Claude Code: `/skill-audit`
    - Codex: `$skill-audit`
    - opencode: watch the sidebar section appear
-2. Check that a log exists and is growing:
+2. Check that a log exists and is growing. Look in `~/.claude/skill-audit`, or in the directory
+   you set as `SKILL_AUDIT_DIR`:
 
    ```bash
    ls -la ~/.claude/skill-audit/
@@ -199,7 +204,7 @@ installing.
    skill-audit status    # counts + recent timeline for the newest session
    ```
 
-If `list` prints `no session logs in ...`, nothing was written — go to
+If `list` prints `no session logs in ...`, nothing was written. Go to
 [Troubleshooting](#troubleshooting).
 
 ## Usage
@@ -208,16 +213,16 @@ If `list` prints `no session logs in ...`, nothing was written — go to
 |----------------------------|------------------------------------------------------------------|-----------:|
 | `skill-audit status [sid]` | Compact counts and recent timeline                               |          0 |
 | `skill-audit report [sid]` | Full timeline                                                    |          0 |
-| `skill-audit watch [sid]`  | Live view, refreshed every two seconds; `q` quits                |          0 |
+| `skill-audit watch [sid]`  | Live view, refreshed every two seconds. `q` quits                |          0 |
 | `skill-audit list`         | Recent sessions                                                  |          0 |
 | `skill-audit --help`       | Usage summary                                                    |          0 |
-| `! skill-audit status`     | Run inside a Claude Code session; queues while the model is busy |          0 |
-| opencode sidebar           | Live timeline beside the conversation; no command to run         |          0 |
+| `! skill-audit status`     | Run inside a Claude Code session. Queues while the model is busy |          0 |
+| opencode sidebar           | Live timeline beside the conversation. No command to run         |          0 |
 | `/skill-audit`             | Show the report inside Claude Code                               | Model turn |
 | `$skill-audit`             | Show the report inside Codex                                     | Model turn |
 
 `status`, `report` and `watch` all take an optional session ID. Without one they use the most
-recently modified log, which is the wrong session if you run several at once — get the ID from
+recently modified log, which is the wrong session if you run several at once. Get the ID from
 `skill-audit list` and pass it explicitly.
 
 The `⚠ edits outside skill context` counter is the compliance red flag: files changed while no
@@ -235,13 +240,13 @@ One NDJSON file per session, one event per line, appended in chronological order
 | Field     | On      | Meaning                                                                       |
 |-----------|---------|-------------------------------------------------------------------------------|
 | `ts`      | both    | UTC timestamp, `YYYY-MM-DDThh:mm:ssZ`                                         |
-| `kind`    | both    | `skill` or `file` — the only two event kinds                                  |
+| `kind`    | both    | `skill` or `file`, the only two event kinds                                   |
 | `cwd`     | both    | Session working directory as reported by the host                             |
 | `name`    | `skill` | Skill identifier, e.g. `superpowers:test-driven-development`                  |
-| `args`    | `skill` | Arguments passed to the skill tool; empty string when there were none         |
+| `args`    | `skill` | Arguments passed to the skill tool, empty string when there were none         |
 | `source`  | `skill` | `tool` for an observed skill tool call, `prompt` for a Codex `$skill-name`    |
-| `turn_id` | `skill` | Codex turn identifier; present only when the host supplies one                |
-| `tool`    | `file`  | Tool that made the edit: `Edit`, `Write`, `NotebookEdit`, `apply_patch`…      |
+| `turn_id` | `skill` | Codex turn identifier, present only when the host supplies one                |
+| `tool`    | `file`  | Tool that made the edit: `Edit`, `Write`, `MultiEdit`, `apply_patch`, etc.    |
 | `path`    | `file`  | Absolute path of the changed file (relative paths are resolved against `cwd`) |
 
 Within a Codex turn, a repeated `(turn_id, name)` skill pair is written once, so a skill named
@@ -261,7 +266,7 @@ find ~/.claude/skill-audit -name '*.ndjson' -mtime +30 -delete
   session keeps running without them.
 - Confirm the plugin is installed: `claude plugin list`, `codex plugin list`, or check the
   `plugin` array in `~/.config/opencode/opencode.json`.
-- On Codex, hooks only run after you review and trust them — accept the prompt.
+- On Codex, hooks only run after you review and trust them, so accept the prompt.
 - Is `jq` installed? `logger.sh` exits silently without it, by design: the hook must never block a
   session. Check with `command -v jq`.
 
@@ -273,13 +278,13 @@ recently modified log, which is the wrong one when sessions run in parallel. Run
 and pass the ID: `skill-audit report <sid>`.
 
 **The CLI finds nothing but the logs exist.** Writer and viewer disagree about the directory. If
-you set `SKILL_AUDIT_DIR` for the host, export it for your shell too — otherwise the CLI looks in
+you set `SKILL_AUDIT_DIR` for the host, export it for your shell too. Otherwise the CLI looks in
 `~/.claude/skill-audit`.
 
-**`skill-audit: command not found`.** The symlink is missing or its directory is not on `PATH`;
-see [CLI on your PATH](#cli-on-your-path-recommended).
+**`skill-audit: command not found`.** The symlink is missing or its directory is not on `PATH`.
+See [CLI on your PATH](#cli-on-your-path-recommended).
 
-**A skill ran but is missing from the timeline.** Expected in some cases — see
+**A skill ran but is missing from the timeline.** Expected in some cases. See
 [Honest limitations](#honest-limitations).
 
 ## Honest limitations
@@ -287,19 +292,19 @@ see [CLI on your PATH](#cli-on-your-path-recommended).
 - **Invocation is not compliance.** The log proves that a skill was explicitly selected or exposed
   as a tool event, not that the result followed every instruction.
 - **Codex automatic skill loading is not a hook event today.** Explicit `$skill-name` references
-  are captured; skills that Codex chooses automatically are not. No transcript parsing is used to
+  are captured. Skills that Codex chooses automatically are not. No transcript parsing is used to
   fill that gap.
 - **Prompt-sourced entries are syntax-level evidence.** Codex supplies plain prompt text to the
   hook, so a lower-case dollar-prefixed token can be logged even if it does not resolve to an
   installed skill. The NDJSON `source: "prompt"` field distinguishes these entries.
-- **Only observable file tools are captured.** Claude `Edit`/`Write`/`NotebookEdit`, Codex
-  `apply_patch`, and opencode `edit`/`write`/`apply_patch` edits are logged. Files created
-  indirectly by shell commands are not visible as separate file events.
+- **Only observable file tools are captured.** Claude `Edit`/`Write`/`MultiEdit`/`NotebookEdit`,
+  Codex `apply_patch`, and opencode `edit`/`write`/`multiedit`/`apply_patch`/`patch` edits are
+  logged. Files created indirectly by shell commands are not visible as separate file events.
 - **opencode agents and subagents are not logged.** They have no equivalent on the other two
   hosts, so logging them would add an event kind only one host can emit. The audit keeps one data
   model across all three.
 - **Session-start injected skills** are context, not skill tool calls, and do not appear.
-- **Concurrent sessions:** the newest-log default can pick the wrong session; pass the session ID
+- **Concurrent sessions:** the newest-log default can pick the wrong session. Pass the session ID
   explicitly after using `skill-audit list`.
 
 ## Uninstall
@@ -316,7 +321,7 @@ Codex:
 codex plugin remove skill-audit@depickeresven-skill-audit
 ```
 
-opencode has no removal subcommand — delete the `"opencode-skill-audit"` entry from the `plugin`
+opencode has no removal subcommand. Delete the `"opencode-skill-audit"` entry from the `plugin`
 array in `~/.config/opencode/opencode.json` (or the project-local `opencode.json`), and remove the
 skill symlink if you made one:
 
@@ -331,16 +336,22 @@ rm -f ~/.local/bin/skill-audit
 rm -rf ~/.claude/skill-audit
 ```
 
-## Requirements
-
-- macOS or Linux
-- `bash` and `jq` for the CLI viewer and the Claude Code / Codex hooks
-- opencode `>= 1.14` for the plugin and its sidebar
-
 ## Development
 
 The hooks and the CLI viewer are plain bash (`scripts/`) with no build step. The opencode plugin
 and sidebar are TypeScript (`src/`) built with [Bun](https://bun.sh).
+
+| Path              | What                                                                       |
+|-------------------|----------------------------------------------------------------------------|
+| `scripts/`        | `logger.sh` hook target, the `skill-audit` CLI, `sync-versions.mjs`        |
+| `src/`            | opencode plugin (`index.ts`), sidebar (`tui.ts`), shared log and view code |
+| `test/`           | Bun tests, fixtures, and `test/format-contract.sh`                         |
+| `.claude-plugin/` | Claude Code plugin manifest and marketplace entry                          |
+| `.codex-plugin/`  | Codex plugin manifest                                                      |
+| `.agents/`        | Codex marketplace manifest                                                 |
+| `skills/`         | The `skill-audit` skill used by Codex and opencode                         |
+| `commands/`       | The `/skill-audit` slash command for Claude Code                           |
+| `.opencode/`      | Local opencode workspace for testing the plugin during development         |
 
 ```bash
 bun install
@@ -359,12 +370,51 @@ bun run build     # dist/index.js (plugin) and dist/tui.js (sidebar)
 | `bun run sync:versions`  | Rewrite the plugin manifests from `package.json`         |
 
 Tests live in `test/`. `test/format-contract.sh` pins the rendered CLI output against fixtures, so
-a change to the timeline format has to be updated there deliberately — that output is the contract
+a change to the timeline format has to be updated there deliberately. That output is the contract
 the sidebar and any third-party viewer rely on.
 
-Version bumps go through `npm version`, which runs `scripts/sync-versions.mjs` and stages
-`.claude-plugin/plugin.json` and `.codex-plugin/plugin.json` alongside it. CI (`.github/workflows/ci.yml`)
-runs `bun run check` plus a manifest-version job on every push and pull request.
+### Releasing
+
+Two workflows, chained.
+
+`.github/workflows/ci.yml` runs four jobs: it checks that both plugin manifests carry the same
+version as `package.json`, runs `bun run check` on Bun 1.2.0 and on the latest Bun, builds the
+bundles, and packs the npm tarball to confirm it ships every entry point `package.json` exports.
+It runs on pull requests and on pushes to `main`, not on every branch, so a pull request is never
+tested twice.
+
+`.github/workflows/publish.yml` starts only when a CI run on `main` finishes successfully. It
+checks out that exact commit and asks npm whether the version in `package.json` already exists:
+
+- **Already on npm.** Nothing is released. This is what an ordinary push to `main` does.
+- **Not on npm.** It publishes with provenance over OIDC, tags the commit, and opens a GitHub
+  release with notes generated from the merged commits.
+
+So a version bump landing on `main` *is* the release, and it can only happen after CI has gone
+green on that commit.
+
+To cut one:
+
+```bash
+npm version patch --no-git-tag-version   # or minor / major
+git commit -am "chore: release $(node -p 'require("./package.json").version')"
+git push
+```
+
+`--no-git-tag-version` matters. The workflow creates the `v<version>` tag itself, and it aborts
+the release if that tag already exists while npm has never seen the version. The bump still runs
+`scripts/sync-versions.mjs` and stages `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`
+alongside it, keeping both manifests on the same version as `package.json`, which CI fails the
+build over if they ever drift.
+
+Use the publish workflow's manual trigger (`workflow_dispatch`) with *dry run* enabled to rehearse
+a publication without releasing anything.
+
+## Requirements
+
+- macOS or Linux
+- `bash` and `jq` for the CLI viewer and the Claude Code / Codex hooks
+- opencode `>= 1.14` for the plugin and its sidebar
 
 ## License
 
