@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# skill-audit — audit skill usage and file edits in Claude Code or Codex sessions.
+# skill-audit: skills invoked and files edited in Claude Code, Codex and opencode sessions.
 #
 #   skill-audit status  [session_id]   compact view: counts + recent timeline
 #   skill-audit report  [session_id]   full timeline
 #   skill-audit watch   [session_id]   live view, redraws every 2s (q to quit)
 #   skill-audit list                   recent sessions
 #
-# Data source: NDJSON logs written by logger.sh (PostToolUse hooks).
-# Default session: most recently modified log.
+# Data source: NDJSON logs written by logger.sh (Claude Code and Codex hooks)
+# and by the opencode plugin. Default session: most recently modified log.
 set -euo pipefail
 
 LOG_DIR="${SKILL_AUDIT_DIR:-$HOME/.claude/skill-audit}"
