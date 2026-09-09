@@ -9,7 +9,9 @@ import {
     appendFile,
     appendSkill,
     group,
+    idleGapMs,
     logPath,
+    NO_SKILL,
     nowTs,
     parse,
     parsePatch,
@@ -319,4 +321,78 @@ test("readSession reports the working directory recorded in the log", () => {
         orphan: 0,
     });
     expect(view.runs).toHaveLength(1);
+});
+
+const MINUTE = 60_000;
+const at = (minutes: number): string =>
+    new Date(Date.UTC(2026, 8, 3, 9, 0, 0) + minutes * MINUTE).toISOString().slice(0, 19) + "Z";
+
+test("group stops attributing files to a skill run after an idle gap", () => {
+    const runs = group(
+        [skill(at(0), "tdd"), file(at(5), "/w/a.ts"), file(at(120), "/w/b.ts")],
+        30 * MINUTE,
+    );
+
+    expect(runs.map((r) => [r.skill, r.files.map((f) => f.path)])).toEqual([
+        ["tdd", ["/w/a.ts"]],
+        [NO_SKILL, ["/w/b.ts"]],
+    ]);
+});
+
+test("group measures the idle gap from the last file, not from the skill", () => {
+    const runs = group(
+        [skill(at(0), "tdd"), file(at(25), "/w/a.ts"), file(at(45), "/w/b.ts")],
+        30 * MINUTE,
+    );
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.files.map((f) => f.path)).toEqual(["/w/a.ts", "/w/b.ts"]);
+});
+
+test("group keeps one synthetic run rather than opening a new one per gap", () => {
+    const runs = group([file(at(0), "/w/a.ts"), file(at(120), "/w/b.ts")], 30 * MINUTE);
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.skill).toBe(NO_SKILL);
+    expect(runs[0]!.files).toHaveLength(2);
+});
+
+test("group reattaches to the next skill run after a gap", () => {
+    const runs = group(
+        [
+            skill(at(0), "tdd"),
+            file(at(120), "/w/a.ts"),
+            skill(at(130), "brainstorming"),
+            file(at(131), "/w/b.ts"),
+        ],
+        30 * MINUTE,
+    );
+
+    expect(runs.map((r) => r.skill)).toEqual(["tdd", NO_SKILL, "brainstorming"]);
+    expect(runs[2]!.files.map((f) => f.path)).toEqual(["/w/b.ts"]);
+});
+
+test("group ignores the idle gap when a timestamp cannot be parsed", () => {
+    const runs = group([skill("t1", "tdd"), file("t2", "/w/a.ts")], 30 * MINUTE);
+
+    expect(runs).toHaveLength(1);
+    expect(runs[0]!.files).toHaveLength(1);
+});
+
+test("idleGapMs defaults to thirty minutes and honours SKILL_AUDIT_IDLE_MINUTES", () => {
+    delete process.env.SKILL_AUDIT_IDLE_MINUTES;
+    expect(idleGapMs()).toBe(30 * MINUTE);
+
+    process.env.SKILL_AUDIT_IDLE_MINUTES = "5";
+    expect(idleGapMs()).toBe(5 * MINUTE);
+
+    process.env.SKILL_AUDIT_IDLE_MINUTES = "nope";
+    expect(idleGapMs()).toBe(30 * MINUTE);
+    delete process.env.SKILL_AUDIT_IDLE_MINUTES;
+});
+
+test("summarize counts edits stranded by an idle gap as orphaned", () => {
+    const events = [skill(at(0), "tdd"), file(at(5), "/w/a.ts"), file(at(120), "/w/b.ts")];
+
+    expect(summarize(events).orphan).toBe(1);
 });

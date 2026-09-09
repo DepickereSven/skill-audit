@@ -58,12 +58,36 @@ export const NO_SKILL = "(no skill active)";
 export type TimelineFile = { ts: string; tool: string; path: string };
 export type SkillRun = { skill: string; ts: string; files: TimelineFile[] };
 
+/** How long a skill run may sit idle before it stops claiming later edits. */
+export const DEFAULT_IDLE_GAP_MS = 30 * 60_000;
+
+/**
+ * The idle gap, in milliseconds. Without one a single skill invoked in the
+ * morning claims every edit made for the rest of the day.
+ */
+export function idleGapMs(): number {
+    const minutes = Number(process.env.SKILL_AUDIT_IDLE_MINUTES);
+    return Number.isFinite(minutes) && minutes > 0 ? minutes * 60_000 : DEFAULT_IDLE_GAP_MS;
+}
+
+/** Epoch milliseconds, or NaN for a timestamp this log did not write. */
+function epoch(ts: string): number {
+    return new Date(ts).getTime();
+}
+
 /**
  * Group a flat event list into skill runs, each carrying the files edited after
  * it. Port of the jq reduce in scripts/skill-audit; the two must agree.
+ *
+ * A run only claims edits that keep arriving: once `gapMs` passes with no
+ * activity, later files fall into a synthetic run instead. An unparseable
+ * timestamp compares as NaN, which never exceeds the gap, so logs written
+ * before this rule existed group exactly as they did before.
  */
-export function group(events: AuditEvent[]): SkillRun[] {
+export function group(events: AuditEvent[], gapMs: number = idleGapMs()): SkillRun[] {
     const runs: SkillRun[] = [];
+    let lastActivity: number = NaN;
+
     for (const event of events) {
         if (event.kind === "skill") {
             runs.push({
@@ -71,9 +95,14 @@ export function group(events: AuditEvent[]): SkillRun[] {
                 ts: event.ts,
                 files: [],
             });
+            lastActivity = epoch(event.ts);
             continue;
         }
-        if (runs.length === 0) {
+
+        const current: SkillRun | undefined = runs[runs.length - 1];
+        const stale: boolean = epoch(event.ts) - lastActivity > gapMs;
+        // A synthetic run has no skill to go stale, so a gap never splits it.
+        if (!current || (stale && current.skill !== NO_SKILL)) {
             runs.push({
                 skill: NO_SKILL,
                 ts: event.ts,
@@ -85,6 +114,7 @@ export function group(events: AuditEvent[]): SkillRun[] {
             tool: event.tool,
             path: event.path,
         });
+        lastActivity = epoch(event.ts);
     }
     return runs;
 }
