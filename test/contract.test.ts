@@ -55,6 +55,26 @@ test("the JavaScript writer reproduces the golden log byte for byte", () => {
         path: "/w/README.md",
         cwd: "/w",
     });
+    appendFile("golden", {
+        ts: "2026-09-03T14:45:00Z",
+        tool: "edit",
+        path: "/w/src/view.ts",
+        cwd: "/w",
+    });
+    // Same run, next hour: the report must open a second hour bucket.
+    appendFile("golden", {
+        ts: "2026-09-03T15:05:00Z",
+        tool: "edit",
+        path: "/w/src/tui.ts",
+        cwd: "/w",
+    });
+    // Over three hours later: past the idle gap, so this edit is orphaned.
+    appendFile("golden", {
+        ts: "2026-09-03T18:30:00Z",
+        tool: "edit",
+        path: "/w/scratch.md",
+        cwd: "/w",
+    });
 
     expect(readFileSync(join(dir, "golden.ndjson"), "utf8")).toBe(readFileSync(FIXTURE, "utf8"));
 });
@@ -65,12 +85,13 @@ test("group produces the same runs the golden report displays", () => {
     expect(group(events).map((run) => [run.skill, run.files.length])).toEqual([
         ["(no skill active)", 1],
         ["superpowers:brainstorming", 0],
-        ["superpowers:test-driven-development", 3],
+        ["superpowers:test-driven-development", 5],
+        ["(no skill active)", 1],
     ]);
     expect(summarize(events)).toEqual({
         runs: 2,
         distinct: 2,
-        files: 4,
-        orphan: 1,
+        files: 7,
+        orphan: 2,
     });
 });
