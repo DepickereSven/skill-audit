@@ -41,10 +41,10 @@ function toneColor(theme: TuiThemeCurrent, tone: Tone) {
     return theme.text;
 }
 
-function toggle(set: ReadonlySet<number>, index: number): Set<number> {
+function toggle(set: ReadonlySet<string>, key: string): Set<string> {
     const next = new Set(set);
-    if (!next.delete(index)) {
-        next.add(index);
+    if (!next.delete(key)) {
+        next.add(key);
     }
     return next;
 }
@@ -52,7 +52,7 @@ function toggle(set: ReadonlySet<number>, index: number): Set<number> {
 function Section(api: TuiPluginApi, sessionID: string, width: number): JSX.Element {
     const [view, setView] = createSignal(readSession(sessionID));
     const [sectionOpen, setSectionOpen] = createSignal(true);
-    const [collapsed, setCollapsed] = createSignal<ReadonlySet<number>>(new Set());
+    const [collapsed, setCollapsed] = createSignal<ReadonlySet<string>>(new Set());
 
     const redraw = () => api.renderer.requestRender();
     onCleanup(
@@ -74,9 +74,9 @@ function Section(api: TuiPluginApi, sessionID: string, width: number): JSX.Eleme
                           setSectionOpen((open) => !open);
                           redraw();
                       }
-                    : line.runIndex !== undefined
+                    : line.key !== undefined
                       ? () => {
-                            setCollapsed((current) => toggle(current, line.runIndex!));
+                            setCollapsed((current) => toggle(current, line.key!));
                             redraw();
                         }
                       : undefined;
