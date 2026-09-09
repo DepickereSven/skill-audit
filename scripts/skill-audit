@@ -43,8 +43,8 @@ group_runs() { # stdin: NDJSON; emits the run array as JSON
       elif $e.kind == "file" then
         ($e.ts | epoch) as $now
         | (.runs | length == 0) as $empty
-        | ($empty | not) and (.runs[-1].skill != "(no skill active)")
-          and ($now != null) and (.last != null) and (($now - .last) > $gap) as $stale
+        | (($empty | not) and (.runs[-1].skill != "(no skill active)")
+           and ($now != null) and (.last != null) and (($now - .last) > $gap)) as $stale
         | (if $empty or $stale
            then .runs + [{skill: "(no skill active)", ts: $e.ts, files: []}]
            else .runs end) as $runs
