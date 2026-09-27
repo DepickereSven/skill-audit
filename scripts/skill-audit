@@ -11,6 +11,8 @@
 set -euo pipefail
 
 LOG_DIR="${SKILL_AUDIT_DIR:-$HOME/.claude/skill-audit}"
+# Seconds a skill run may sit idle before it stops claiming later edits.
+IDLE_GAP=$(( ${SKILL_AUDIT_IDLE_MINUTES:-30} * 60 ))
 
 if [ -t 1 ]; then
   BOLD=$'\033[1m'; DIM=$'\033[2m'; CYAN=$'\033[36m'; YEL=$'\033[33m'; GRN=$'\033[32m'; RST=$'\033[0m'
@@ -25,39 +27,93 @@ resolve_sid() {
   [ -n "$latest" ] && basename "$latest" .ndjson
 }
 
-# Emit timeline as TSV: S<TAB>ts<TAB>skill  /  F<TAB>ts<TAB>tool<TAB>path
-timeline_tsv() {
-  jq -rs '
-    reduce .[] as $e ([];
+local_hhmm() { # $1: ISO-8601 UTC timestamp -> local HH:MM
+  jq -rn --arg ts "$1" '$ts | try (fromdateiso8601 | strflocaltime("%H:%M")) catch ""'
+}
+
+# Group events into skill runs. A run stops claiming files once IDLE_GAP passes
+# with no activity, so one morning skill cannot swallow a whole day of edits.
+# Mirrors group() in src/log.ts; the two must agree.
+group_runs() { # stdin: NDJSON; emits the run array as JSON
+  jq -s --argjson gap "$IDLE_GAP" '
+    def epoch: (try (. | fromdateiso8601) catch null);
+    reduce .[] as $e ({runs: [], last: null};
       if $e.kind == "skill" then
-        . + [{skill: $e.name, ts: $e.ts, files: []}]
+        {runs: (.runs + [{skill: $e.name, ts: $e.ts, files: []}]), last: ($e.ts | epoch)}
       elif $e.kind == "file" then
-        (if length == 0 then [{skill: "(no skill active)", ts: $e.ts, files: []}] else . end)
-        | .[:-1] + [(.[-1] | .files += [{ts: $e.ts, tool: $e.tool, path: $e.path}])]
+        ($e.ts | epoch) as $now
+        | (.runs | length == 0) as $empty
+        | (($empty | not) and (.runs[-1].skill != "(no skill active)")
+           and ($now != null) and (.last != null) and (($now - .last) > $gap)) as $stale
+        | (if $empty or $stale
+           then .runs + [{skill: "(no skill active)", ts: $e.ts, files: []}]
+           else .runs end) as $runs
+        | {runs: ($runs[:-1] + [($runs[-1] | .files += [{ts: $e.ts, tool: $e.tool, path: $e.path}])]),
+           last: $now}
       else . end)
-    | .[]
-    | [["S", .ts, .skill]] + [(.files[] | ["F", .ts, .tool, .path])]
-    | .[] | @tsv
+    | .runs
   ' "$1"
+}
+
+# Emit timeline as TSV, one node per line, in the order they are rendered:
+#   S<TAB>skill            a skill run
+#   H<TAB>hh:mm<TAB>count  an hour bucket inside the run above
+#   F<TAB>hh:mm<TAB>tool<TAB>path
+# Times are the local clock, converted from the UTC the log stores.
+timeline_tsv() {
+  group_runs "$1" | jq -r '
+    def hhmm: (try (fromdateiso8601 | strflocaltime("%H:%M")) catch "");
+    def hourkey: (try (fromdateiso8601 | strflocaltime("%Y-%m-%d %H:00")) catch "");
+    .[]
+    | [["S", .skill]]
+      + ([.files[] | . + {bucket: (.ts | hourkey)}]
+         | group_by(.bucket)
+         | sort_by(.[0].bucket)
+         | map([["H", (.[0].ts | hhmm | .[0:2] + ":00"), (length | tostring)]]
+               + map(["F", (.ts | hhmm), .tool, .path]))
+         | add // [])
+    | .[] | @tsv
+  '
 }
 
 render_timeline() { # stdin: TSV lines; $1: cwd prefix to strip
   local cwd="${1:-}"
-  while IFS=$'\t' read -r type ts a b; do
-    local hhmm="${ts:11:5}"
+  while IFS=$'\t' read -r type a b c; do
     case "$type" in
       S)
         if [ "$a" = "(no skill active)" ]; then
-          printf '  %s %s⚠ %s%s\n' "$hhmm" "$YEL" "$a" "$RST"
+          printf '  %s⚠ %s%s\n' "$YEL" "$a" "$RST"
         else
-          printf '  %s %s⚡ %s%s\n' "$hhmm" "$CYAN" "$a" "$RST"
+          printf '  %s⚡ %s%s\n' "$CYAN" "$a" "$RST"
         fi ;;
+      H)
+        printf '     %s%s%s  %s(%s)%s\n' "$BOLD" "$a" "$RST" "$DIM" "$b" "$RST" ;;
       F)
-        local rel="$b"
-        [ -n "$cwd" ] && rel="${b#"$cwd"/}"
-        printf '  %s %s│%s  ✎ %s  %s%s%s\n' "$hhmm" "$DIM" "$RST" "$rel" "$DIM" "$a" "$RST" ;;
+        local rel="$c"
+        [ -n "$cwd" ] && rel="${c#"$cwd"/}"
+        printf '       %s %s✎%s %s  %s%s%s\n' "$a" "$DIM" "$RST" "$rel" "$DIM" "$b" "$RST" ;;
     esac
   done
+}
+
+# Keep the last $1 rows, re-emitting the skill and hour headers that were in
+# effect at the cut so the tail is not a list of files with no owner.
+tail_with_context() {
+  awk -F'\t' -v max="$1" '
+    { rows[NR] = $0; type[NR] = $1 }
+    END {
+      if (NR <= max) { for (i = 1; i <= NR; i++) print rows[i]; exit }
+      start = NR - max + 1
+      s = 0; h = 0
+      for (i = 1; i < start; i++) {
+        if (type[i] == "S") { s = i; h = 0 }
+        else if (type[i] == "H") { h = i }
+      }
+      if (s) print rows[s]
+      if (h) print rows[h]
+      for (i = start; i <= NR; i++) print rows[i]
+    }
+  '
 }
 
 session_header_and_body() { # $1: sid, $2: max timeline lines (0 = all)
@@ -75,19 +131,17 @@ session_header_and_body() { # $1: sid, $2: max timeline lines (0 = all)
   n_files="$(jq -r 'select(.kind=="file") | .path' "$log" | sort -u | grep -c . || true)"
   t_first="$(jq -r '.ts' "$log" | head -1 || true)"
   t_last="$(jq -r '.ts' "$log" | tail -1 || true)"
-  n_orphan="$(jq -rs '
-    reduce .[] as $e ([];
-      if $e.kind == "skill" then . + [{skill: $e.name, files: 0}]
-      elif $e.kind == "file" then
-        (if length == 0 then [{skill: "(no skill active)", files: 0}] else . end)
-        | .[:-1] + [(.[-1] | .files += 1)]
-      else . end)
-    | map(select(.skill == "(no skill active)") | .files) | add // 0
-  ' "$log")"
+  n_orphan="$(group_runs "$log" | jq -r '
+    map(select(.skill == "(no skill active)") | .files | length) | add // 0
+  ')"
 
-  printf '%s● Skill audit%s — %s %s·%s %s %s·%s %s→%s UTC\n\n' \
+  local c_first c_last
+  c_first="$(local_hhmm "$t_first")"
+  c_last="$(local_hhmm "$t_last")"
+
+  printf '%s● Skill audit%s — %s %s·%s %s %s·%s %s→%s\n\n' \
     "$BOLD" "$RST" "${sid:0:8}" "$DIM" "$RST" "${cwd/#$HOME/~}" \
-    "$DIM" "$RST" "${t_first:11:5}" "${t_last:11:5}"
+    "$DIM" "$RST" "$c_first" "$c_last"
 
   local tl
   tl="$(timeline_tsv "$log")"
@@ -95,7 +149,7 @@ session_header_and_body() { # $1: sid, $2: max timeline lines (0 = all)
     printf '  %sno skill or file events recorded yet%s\n' "$DIM" "$RST"
   elif [ "$max" -gt 0 ] && [ "$(printf '%s\n' "$tl" | wc -l)" -gt "$max" ]; then
     printf '  %s… earlier events truncated — `skill-audit report` for all%s\n' "$DIM" "$RST"
-    printf '%s\n' "$tl" | tail -"$max" | render_timeline "$cwd"
+    printf '%s\n' "$tl" | tail_with_context "$max" | render_timeline "$cwd"
   else
     printf '%s\n' "$tl" | render_timeline "$cwd"
   fi

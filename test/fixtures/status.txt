@@ -1,5 +1,6 @@
 ● Skill audit — session · /w · 14:01→18:30
 
+  … earlier events truncated — `skill-audit report` for all
   ⚠ (no skill active)
      14:00  (1)
        14:01 ✎ src/index.ts  edit

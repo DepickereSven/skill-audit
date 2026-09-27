@@ -1,6 +1,8 @@
 name: Publish
 
 on:
+  pull_request:
+    types: [labeled, synchronize, reopened]
   workflow_run:
     workflows: [ "CI" ]
     types: [ completed ]
@@ -16,6 +18,67 @@ permissions:
   contents: read
 
 jobs:
+  dev-candidate:
+    name: publish PR dev candidate
+    if: >-
+      contains(github.event.pull_request.labels.*.name, 'release:dev') &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Check out the pull request revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Install Node and point npm at the public registry
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install the latest Bun, which builds the bundles npm ships
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Upgrade to npm 11.5.1 or newer, the minimum for trusted publishing over OIDC
+        run: npm install -g npm@latest
+
+      - name: Install dependencies from the committed lockfile
+        run: bun install --frozen-lockfile
+
+      - name: Assign a unique immutable dev candidate version
+        run: |
+          base_version=$(node -p "require('./package.json').version.split('-')[0]")
+          candidate_version="${base_version}-dev.pr${{ github.event.pull_request.number }}.${{ github.run_id }}"
+          npm version "$candidate_version" --no-git-tag-version --ignore-scripts
+          bun run sync:versions
+          echo "candidate_version=$candidate_version" >> "$GITHUB_ENV"
+
+      - name: Check manifests, tests, and build before publishing
+        run: |
+          bun run check:versions
+          bun run check
+          bun run build
+
+      - name: Confirm the candidate version is not already on npm
+        id: candidate
+        run: |
+          name=$(node -p "require('./package.json').name")
+          if npm view "$name@$candidate_version" version >/dev/null 2>&1; then
+            echo "is-new=false" >> "$GITHUB_OUTPUT"
+            echo "$name@$candidate_version already exists on npm; refusing to overwrite it"
+          else
+            echo "is-new=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish the dev candidate to npm with provenance
+        if: steps.candidate.outputs.is-new == 'true'
+        run: npm publish --provenance --access public --tag dev
+
   publish:
     name: publish to npm
     if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
