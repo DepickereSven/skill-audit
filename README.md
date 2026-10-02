@@ -117,8 +117,8 @@ after every skill and file-edit tool call, and polls the log every two seconds.
 
 - **Opening:** it opens by itself at session start once the terminal is 144 columns or wider.
   Narrower terminals hold it back until you run `/skill-audit-pane`, which opens it at any width.
-- **Placement:** in fullscreen from 110 columns it docks beside the transcript and shows the full
-  timeline. Press a `▼`/`▶` marker to collapse or expand a run or an hour. Elsewhere it sits above
+- **Placement:** in fullscreen from 110 columns it docks beside the transcript, 40 columns wide
+  (drag the edge to change it; your width is kept), and shows the full timeline. Press a `▼`/`▶` marker to collapse or expand a run or an hour. Elsewhere it sits above
   the prompt in a compact form: the header and the latest run.
 - **Other panes:** panes from other plugins become tabs beside it (click a tab, or ctrl+x tab).
   Only one is shown at a time. Esc or the close mark closes it.

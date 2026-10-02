@@ -15,6 +15,11 @@ const PANE = "skill-audit";
 const TITLE = "Skill audit";
 const COMMAND = "skill-audit-pane";
 const POLL_MS = 2000;
+/**
+ * The dock width asked for, in body columns: room for a file row (indent, time
+ * and icon take 12) plus a readable path. A width the person drags wins.
+ */
+const COLUMNS = 40;
 
 const EMPTY_VIEW: AuditPaneView = {
     runs: [],
@@ -100,7 +105,7 @@ export const register: Register = (on) => {
         });
         // Opened unasked, so it seats from 144 columns and waits below that;
         // no `focus`, so it never takes a tab another plugin is showing.
-        void $.ui.open({ id: PANE, title: TITLE });
+        void $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS });
         $.clock.every(POLL_MS, () => void refresh($));
         await refresh($);
 
@@ -109,7 +114,7 @@ export const register: Register = (on) => {
 
     on("command.run", { command: COMMAND }, async ($) => {
         await refresh($);
-        await $.ui.open({ id: PANE, title: TITLE });
+        await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS });
 
         return { text: "Skill audit pane opened." };
     });

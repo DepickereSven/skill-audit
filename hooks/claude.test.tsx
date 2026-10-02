@@ -20,8 +20,8 @@ type World = {
     files: Record<string, string>;
     /** Makes every read fail while true. */
     failing?: () => boolean;
-    /** Sees each pane id the plugin opens. */
-    opened?: string[];
+    /** Sees each pane the plugin opens: its id and the dock width it asks for. */
+    opened?: { id: string; columns?: number }[];
 };
 
 /** The engine beneath the plugin: one session, a log directory, a surface that seats panes. */
@@ -36,7 +36,7 @@ function world(on: On, { files, failing = () => false, opened = [] }: World): vo
             : { value: body };
     });
     on("ui.open", (_$, e) => {
-        opened.push(e.id);
+        opened.push({ id: e.id, columns: e.columns });
         return { value: { isPlaced: true } };
     });
     on("command.register", (_$, e) => ({ value: { command: e.name } }));
@@ -61,12 +61,12 @@ const RUN = {
 } as const;
 
 test("the command opens the pane and the pane shows the session's timeline", async ($, on) => {
-    const opened: string[] = [];
+    const opened: { id: string; columns?: number }[] = [];
     world(on, { files: { [LOG]: TEXT }, opened });
 
     const ran = await $.command.run(RUN);
     expect(ran.text).toBe("Skill audit pane opened.");
-    expect(opened).toContain("skill-audit");
+    expect(opened).toContainEqual({ id: "skill-audit", columns: 40 });
 
     for (const surface of SURFACES) {
         const ui = await $.ui.mount({
