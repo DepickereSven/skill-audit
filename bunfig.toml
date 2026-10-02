@@ -1,0 +1,3 @@
+[test]
+# hooks/*.test.tsx are Claude Code mod tests, run by test/claude-pane.sh.
+root = "test"

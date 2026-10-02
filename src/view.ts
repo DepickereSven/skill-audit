@@ -1,6 +1,13 @@
-import { basename, relative } from "node:path";
-
-import { NO_SKILL, type SessionView, type SkillRun, type Summary, type TimelineFile } from "./log";
+import {
+    baseName,
+    env,
+    NO_SKILL,
+    relativeTo,
+    type SessionView,
+    type SkillRun,
+    type Summary,
+    type TimelineFile,
+} from "./core";
 
 export type IconSet = {
     run: string;
@@ -31,8 +38,13 @@ const EMOJI_ICONS: IconSet = {
     closed: "▶",
 };
 
+/** The icon set for a `SKILL_AUDIT_ICONS` value; anything but `emoji` is the text set. */
+export function iconsFor(style: string | undefined): IconSet {
+    return style === "emoji" ? EMOJI_ICONS : TEXT_ICONS;
+}
+
 export function icons(): IconSet {
-    return process.env.SKILL_AUDIT_ICONS === "emoji" ? EMOJI_ICONS : TEXT_ICONS;
+    return iconsFor(env("SKILL_AUDIT_ICONS"));
 }
 
 function pad(value: number): string {
@@ -92,8 +104,7 @@ export function bucketByHour(files: TimelineFile[]): HourBucket[] {
     return buckets;
 }
 
-export function headerLine(summary: Summary): string {
-    const icon = icons();
+export function headerLine(summary: Summary, icon: IconSet = icons()): string {
     const counts = `${icon.run}${summary.runs} ${icon.file}${summary.files}${
         summary.orphan > 0 ? ` ${icon.warn}${summary.orphan}` : ""
     }`;
@@ -101,8 +112,7 @@ export function headerLine(summary: Summary): string {
 }
 
 /** The skill name leads the row; its times live on the hour buckets below it. */
-export function runTitle(run: SkillRun, collapsed: boolean): string {
-    const icon = icons();
+export function runTitle(run: SkillRun, collapsed: boolean, icon: IconSet = icons()): string {
     const name: string = run.skill === NO_SKILL ? `${icon.warn} no skill` : shortName(run.skill);
     if (run.files.length === 0) {
         return `  ${name}`;
@@ -110,8 +120,7 @@ export function runTitle(run: SkillRun, collapsed: boolean): string {
     return collapsed ? `${icon.closed} ${name} (${run.files.length})` : `${icon.open} ${name}`;
 }
 
-export function hourTitle(bucket: HourBucket, collapsed: boolean): string {
-    const icon = icons();
+export function hourTitle(bucket: HourBucket, collapsed: boolean, icon: IconSet = icons()): string {
     const marker: string = collapsed ? icon.closed : icon.open;
     return `${marker} ${bucket.hour} (${bucket.files.length})`;
 }
@@ -121,11 +130,11 @@ export function hourTitle(bucket: HourBucket, collapsed: boolean): string {
  * basename, then a truncated basename.
  */
 export function displayPath(path: string, cwd: string, width: number): string {
-    const rel: string = cwd && path.startsWith(`${cwd}/`) ? relative(cwd, path) : path;
+    const rel: string = relativeTo(path, cwd);
     if (rel.length <= width) {
         return rel;
     }
-    const base: string = basename(rel);
+    const base: string = baseName(rel);
     if (base.length <= width) {
         return base;
     }
@@ -143,6 +152,8 @@ export type SidebarOptions = {
     collapsed: Set<string>;
     /** Usable sidebar width, in columns. */
     width: number;
+    /** Icons to draw with; the environment's set when omitted. */
+    icons?: IconSet;
 };
 
 const HOUR_INDENT = "  ";
@@ -161,11 +172,11 @@ export function hourKeyOf(index: number, bucket: HourBucket): string {
  * the OpenTUI glue means it can be tested without a terminal.
  */
 export function sidebarLines(view: SessionView, options: SidebarOptions): Line[] {
-    const icon = icons();
+    const icon: IconSet = options.icons ?? icons();
     const marker = options.sectionOpen ? icon.open : icon.closed;
     const lines: Line[] = [
         {
-            text: `${marker} ${headerLine(view.summary)}`,
+            text: `${marker} ${headerLine(view.summary, icon)}`,
             tone: "text",
         },
     ];
@@ -186,7 +197,7 @@ export function sidebarLines(view: SessionView, options: SidebarOptions): Line[]
         const key: string = runKey(index);
         const runCollapsed: boolean = options.collapsed.has(key);
         lines.push({
-            text: runTitle(run, runCollapsed),
+            text: runTitle(run, runCollapsed, icon),
             tone: run.skill === NO_SKILL ? "warning" : "accent",
             key,
         });
@@ -198,7 +209,7 @@ export function sidebarLines(view: SessionView, options: SidebarOptions): Line[]
             const bucketKey: string = hourKeyOf(index, bucket);
             const hourCollapsed: boolean = options.collapsed.has(bucketKey);
             lines.push({
-                text: `${HOUR_INDENT}${hourTitle(bucket, hourCollapsed)}`,
+                text: `${HOUR_INDENT}${hourTitle(bucket, hourCollapsed, icon)}`,
                 tone: "text",
                 key: bucketKey,
             });
