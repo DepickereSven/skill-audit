@@ -173,6 +173,8 @@ test("a failed read keeps the last view and says so", async ($, on) => {
     world(on, { files: { [LOG]: TEXT }, failing: () => failing });
     await $.command.run(RUN);
     failing = true;
+    // Close, then open again: opening re-reads the log.
+    await $.command.run(RUN);
     await $.command.run(RUN);
 
     const ui = await $.ui.mount({
@@ -187,33 +189,23 @@ test("a failed read keeps the last view and says so", async ($, on) => {
     await ui.unmount();
 });
 
-test("hide closes the pane, and show opens it again", async ($, on) => {
+test("the command flips the pane between open and closed", async ($, on) => {
     const open = new Set<string>();
     world(on, { files: { [LOG]: TEXT }, open });
 
-    await $.command.run(RUN);
+    const shown = await $.command.run(RUN);
+    expect(shown.text).toBe("Skill audit pane opened.");
     expect(open.has("skill-audit")).toBe(true);
 
-    const hidden = await $.command.run({ ...RUN, args: "hide" });
+    const hidden = await $.command.run(RUN);
     expect(hidden.text).toMatch(/hidden/);
     expect(open.has("skill-audit")).toBe(false);
 
-    const shown = await $.command.run({ ...RUN, args: "show" });
-    expect(shown.text).toBe("Skill audit pane opened.");
+    await $.command.run(RUN);
     expect(open.has("skill-audit")).toBe(true);
 });
 
-test("toggle flips the pane between open and closed", async ($, on) => {
-    const open = new Set<string>();
-    world(on, { files: { [LOG]: TEXT }, open });
-
-    await $.command.run({ ...RUN, args: "toggle" });
-    expect(open.has("skill-audit")).toBe(true);
-    await $.command.run({ ...RUN, args: "toggle" });
-    expect(open.has("skill-audit")).toBe(false);
-});
-
-test("a hidden pane stays closed in the next session until shown", async ($, on) => {
+test("a hidden pane stays closed in the next session until the command opens it", async ($, on) => {
     const opened: { id: string; columns?: number }[] = [];
     world(on, { files: { [LOG]: TEXT }, opened, store: { hidden: true } });
 
@@ -230,13 +222,4 @@ test("a session starts with the pane open when it was never hidden", async ($, o
 
     await $.session.start(START);
     expect(opened).toContainEqual({ id: "skill-audit", columns: 40 });
-});
-
-test("an unknown argument explains the usage and leaves the pane alone", async ($, on) => {
-    const open = new Set<string>();
-    world(on, { files: { [LOG]: TEXT }, open });
-
-    const ran = await $.command.run({ ...RUN, args: "sideways" });
-    expect(ran.text).toMatch(/\[show\|hide\|toggle\]/);
-    expect(open.size).toBe(0);
 });

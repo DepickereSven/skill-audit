@@ -16,8 +16,9 @@ const TITLE = "Skill audit";
 const COMMAND = "skill-audit-pane";
 const POLL_MS = 2000;
 /**
- * `$.store` key, kept between sessions: set by `/skill-audit-pane hide`,
- * cleared by `show`. While set, a new session does not open the pane by itself.
+ * `$.store` key, kept between sessions: set when `/skill-audit-pane` closes the
+ * pane, cleared when it opens it. While set, a new session does not open the
+ * pane by itself.
  */
 const HIDDEN = "hidden";
 /**
@@ -107,7 +108,6 @@ export const register: Register = (on) => {
         await $.command.register({
             name: COMMAND,
             description: "Show or hide this session's skill-audit timeline pane",
-            argumentHint: "[show|hide|toggle]",
         });
         // Opened unasked, so it seats from 144 columns and waits below that;
         // no `focus`, so it never takes a tab another plugin is showing.
@@ -120,17 +120,10 @@ export const register: Register = (on) => {
         return next(e);
     });
 
-    on("command.run", { command: COMMAND }, async ($, e) => {
-        const action: string = e.args.trim().toLowerCase() || "show";
-        if (action !== "show" && action !== "hide" && action !== "toggle") {
-            return {
-                text: `Unknown argument "${e.args.trim()}". Use: /${COMMAND} [show|hide|toggle]`,
-            };
-        }
+    on("command.run", { command: COMMAND }, async ($) => {
         const isOpen: boolean = (await $.ui.panes()).some((pane) => pane.id === PANE);
-        const isHiding: boolean = action === "hide" || (action === "toggle" && isOpen);
 
-        if (isHiding) {
+        if (isOpen) {
             await $.store.set(HIDDEN, true);
             await $.ui.close({ id: PANE });
             return { text: `Skill audit pane hidden. /${COMMAND} brings it back.` };

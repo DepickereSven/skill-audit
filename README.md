@@ -128,16 +128,14 @@ after every skill and file-edit tool call, and polls the log every two seconds.
 
 ##### Showing and hiding the pane
 
-| Command                    | What                                                                   |
-|----------------------------|------------------------------------------------------------------------|
-| `/skill-audit-pane`        | Open the pane at any width. Same as `show`                             |
-| `/skill-audit-pane show`   | Open the pane, and let new sessions open it by themselves again        |
-| `/skill-audit-pane hide`   | Close the pane, and keep it closed at the start of new sessions        |
-| `/skill-audit-pane toggle` | `hide` when the pane is open, `show` when it is not                    |
-| Esc or the close mark      | Close the pane for this session only; the next session opens it again  |
+| Command               | What                                                                        |
+|-----------------------|-----------------------------------------------------------------------------|
+| `/skill-audit-pane`   | Close the pane when it is open, open it (at any width) when it is not       |
+| Esc or the close mark | Close the pane for this session only; the next session opens it again       |
 
-`hide` is remembered in the plugin's own store (a JSON file under your Claude Code configuration
-directory), so it survives restarts until you run `/skill-audit-pane` or `/skill-audit-pane show`.
+Closing with `/skill-audit-pane` is remembered in the plugin's own store (a JSON file under your
+Claude Code configuration directory), so new sessions keep it closed until you run
+`/skill-audit-pane` again, which opens it and turns auto-open back on.
 Hiding never stops recording: the shell hooks keep writing the log, and the CLI and the pane read
 it back the moment you open it again.
 
@@ -278,13 +276,13 @@ recently modified log, which is the wrong session if you run several at once. Ge
 
 ### Inside a session
 
-| Host        | Command                                  | What                                                       |     Tokens |
-|-------------|------------------------------------------|------------------------------------------------------------|-----------:|
-| Claude Code | `/skill-audit-pane [show\|hide\|toggle]` | Show or hide the live pane ([details](#showing-and-hiding-the-pane)) |          0 |
-| Claude Code | `! skill-audit status`                   | Run the CLI in the session. Queues while the model is busy |          0 |
-| Claude Code | `/skill-audit`                           | Print the full report in the transcript                    | Model turn |
-| Codex       | `$skill-audit`                           | Print the full report in the transcript                    | Model turn |
-| opencode    | `skill-audit` skill                      | Print the full report, once linked ([opencode](#opencode)) | Model turn |
+| Host        | Command                | What                                                                 |     Tokens |
+|-------------|------------------------|----------------------------------------------------------------------|-----------:|
+| Claude Code | `/skill-audit-pane`    | Show or hide the live pane ([details](#showing-and-hiding-the-pane)) |          0 |
+| Claude Code | `! skill-audit status` | Run the CLI in the session. Queues while the model is busy           |          0 |
+| Claude Code | `/skill-audit`         | Print the full report in the transcript                              | Model turn |
+| Codex       | `$skill-audit`         | Print the full report in the transcript                              | Model turn |
+| opencode    | `skill-audit` skill    | Print the full report, once linked ([opencode](#opencode))           | Model turn |
 
 ### Live views
 
@@ -298,10 +296,10 @@ recently modified log, which is the wrong session if you run several at once. Ge
 
 Set these in the environment of the host (and of your shell, for the CLI). All are optional.
 
-| Variable                   | Default                 | What                                                                       |
-|----------------------------|-------------------------|----------------------------------------------------------------------------|
-| `SKILL_AUDIT_DIR`          | `~/.claude/skill-audit` | Where logs are written and read                                            |
-| `SKILL_AUDIT_IDLE_MINUTES` | `30`                    | Idle minutes after which a skill run stops claiming edits                  |
+| Variable                   | Default                 | What                                                                                |
+|----------------------------|-------------------------|-------------------------------------------------------------------------------------|
+| `SKILL_AUDIT_DIR`          | `~/.claude/skill-audit` | Where logs are written and read                                                     |
+| `SKILL_AUDIT_IDLE_MINUTES` | `30`                    | Idle minutes after which a skill run stops claiming edits                           |
 | `SKILL_AUDIT_ICONS`        | one-cell icons          | `emoji` uses `⚡` / `⚠` in the pane and sidebar (two cells wide in most terminals) |
 
 The `⚠ edits outside skill context` counter is the compliance red flag: files changed while no
@@ -363,8 +361,8 @@ you set `SKILL_AUDIT_DIR` for the host, export it for your shell too. Otherwise 
 **`skill-audit: command not found`.** The symlink is missing or its directory is not on `PATH`.
 See [CLI on your PATH](#cli-on-your-path-recommended).
 
-**The Claude Code pane no longer opens at session start.** You hid it with
-`/skill-audit-pane hide`, which is remembered across sessions. Run `/skill-audit-pane` to show it
+**The Claude Code pane no longer opens at session start.** You closed it with
+`/skill-audit-pane`, which is remembered across sessions. Run `/skill-audit-pane` again to show it
 and turn auto-open back on. If you never hid it, your terminal is likely narrower than 144
 columns; the command opens it at any width.
 
