@@ -16,6 +16,12 @@ const TITLE = "Skill audit";
 const COMMAND = "skill-audit-pane";
 const POLL_MS = 2000;
 /**
+ * `$.store` key, kept between sessions: set when `/skill-audit-pane` closes the
+ * pane, cleared when it opens it. While set, a new session does not open the
+ * pane by itself.
+ */
+const HIDDEN = "hidden";
+/**
  * The dock width asked for, in body columns: room for a file row (indent, time
  * and icon take 12) plus a readable path. A width the person drags wins.
  */
@@ -101,11 +107,13 @@ export const register: Register = (on) => {
     on("session.start", async ($, e, next) => {
         await $.command.register({
             name: COMMAND,
-            description: "Show this session's skill-audit timeline in a pane",
+            description: "Show or hide this session's skill-audit timeline pane",
         });
         // Opened unasked, so it seats from 144 columns and waits below that;
         // no `focus`, so it never takes a tab another plugin is showing.
-        void $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS });
+        if ((await $.store.get(HIDDEN)) !== true) {
+            void $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS });
+        }
         $.clock.every(POLL_MS, () => void refresh($));
         await refresh($);
 
@@ -113,6 +121,15 @@ export const register: Register = (on) => {
     });
 
     on("command.run", { command: COMMAND }, async ($) => {
+        const isOpen: boolean = (await $.ui.panes()).some((pane) => pane.id === PANE);
+
+        if (isOpen) {
+            await $.store.set(HIDDEN, true);
+            await $.ui.close({ id: PANE });
+            return { text: `Skill audit pane hidden. /${COMMAND} brings it back.` };
+        }
+
+        await $.store.delete(HIDDEN);
         await refresh($);
         await $.ui.open({ id: PANE, title: TITLE, columns: COLUMNS });
 

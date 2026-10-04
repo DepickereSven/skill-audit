@@ -22,11 +22,20 @@ type World = {
     failing?: () => boolean;
     /** Sees each pane the plugin opens: its id and the dock width it asks for. */
     opened?: { id: string; columns?: number }[];
+    /** Ids of the panes open right now. */
+    open?: Set<string>;
+    /** What the plugin's `$.store` holds at the start. */
+    store?: Record<string, unknown>;
 };
 
 /** The engine beneath the plugin: one session, a log directory, a surface that seats panes. */
-function world(on: On, { files, failing = () => false, opened = [] }: World): void {
+function world(
+    on: On,
+    { files, failing = () => false, opened = [], open = new Set(), store = {} }: World,
+): void {
     mock.env(on, { SKILL_AUDIT_DIR: DIR });
+    mock.store(on, store);
+    mock.clock(on);
     on("session.id", () => ({ value: SESSION }));
     on("fs.exists", (_$, e) => ({ value: e.path in files }));
     on("fs.read", (_$, e) => {
@@ -37,9 +46,24 @@ function world(on: On, { files, failing = () => false, opened = [] }: World): vo
     });
     on("ui.open", (_$, e) => {
         opened.push({ id: e.id, columns: e.columns });
+        open.add(e.id);
         return { value: { isPlaced: true } };
     });
+    on("ui.close", (_$, e) => {
+        open.delete(e.id);
+        return { value: undefined };
+    });
+    on("ui.panes", () => ({
+        value: [...open].map((id) => ({
+            id,
+            title: "Skill audit",
+            isShown: true,
+            isFocused: false,
+            isPlaced: true,
+        })),
+    }));
     on("command.register", (_$, e) => ({ value: { command: e.name } }));
+    on("session.start", (_$, e) => ({ cwd: e.cwd }));
 }
 
 function paneProps(placement: "dock" | "inline") {
@@ -59,6 +83,8 @@ const RUN = {
     origin: { kind: "composer" },
     presentation: { isFullscreen: true, columns: 160 },
 } as const;
+
+const START = { cwd: "/w", surface: "terminal", isInteractive: true } as const;
 
 test("the command opens the pane and the pane shows the session's timeline", async ($, on) => {
     const opened: { id: string; columns?: number }[] = [];
@@ -147,6 +173,8 @@ test("a failed read keeps the last view and says so", async ($, on) => {
     world(on, { files: { [LOG]: TEXT }, failing: () => failing });
     await $.command.run(RUN);
     failing = true;
+    // Close, then open again: opening re-reads the log.
+    await $.command.run(RUN);
     await $.command.run(RUN);
 
     const ui = await $.ui.mount({
@@ -159,4 +187,39 @@ test("a failed read keeps the last view and says so", async ($, on) => {
     expect(await ui.find({ type: "Text", text: /brainstorming/ })).toBeDefined();
     expect(await ui.find({ type: "Text", text: /log unreadable/ })).toBeDefined();
     await ui.unmount();
+});
+
+test("the command flips the pane between open and closed", async ($, on) => {
+    const open = new Set<string>();
+    world(on, { files: { [LOG]: TEXT }, open });
+
+    const shown = await $.command.run(RUN);
+    expect(shown.text).toBe("Skill audit pane opened.");
+    expect(open.has("skill-audit")).toBe(true);
+
+    const hidden = await $.command.run(RUN);
+    expect(hidden.text).toMatch(/hidden/);
+    expect(open.has("skill-audit")).toBe(false);
+
+    await $.command.run(RUN);
+    expect(open.has("skill-audit")).toBe(true);
+});
+
+test("a hidden pane stays closed in the next session until the command opens it", async ($, on) => {
+    const opened: { id: string; columns?: number }[] = [];
+    world(on, { files: { [LOG]: TEXT }, opened, store: { hidden: true } });
+
+    await $.session.start(START);
+    expect(opened).toHaveLength(0);
+
+    await $.command.run(RUN);
+    expect(opened).toContainEqual({ id: "skill-audit", columns: 40 });
+});
+
+test("a session starts with the pane open when it was never hidden", async ($, on) => {
+    const opened: { id: string; columns?: number }[] = [];
+    world(on, { files: { [LOG]: TEXT }, opened });
+
+    await $.session.start(START);
+    expect(opened).toContainEqual({ id: "skill-audit", columns: 40 });
 });
